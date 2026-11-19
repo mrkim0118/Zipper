@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- .NET Framework 4.8 ships with Windows 10/11, so no runtime install and a tiny exe -->
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>Zipper</AssemblyName>
+    <RootNamespace>Zipper</RootNamespace>
+    <ApplicationIcon>..\..\Assets\icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <Product>Zipper</Product>
+    <Company>Manggdy</Company>
+    <Copyright>Copyright (c) 2026 Manggdy</Copyright>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\ThirdParty\7-Zip\7z.exe" Link="7z.exe" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\ThirdParty\7-Zip\7z.dll" Link="7z.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

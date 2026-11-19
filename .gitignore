@@ -1,0 +1,6 @@
+bin/
+obj/
+.vs/
+*.user
+Installer/Output/
+tests/screens/
