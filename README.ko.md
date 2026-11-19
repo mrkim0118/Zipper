@@ -4,7 +4,7 @@
 
 <h1 align="center">Zipper</h1>
 
-<p align="center">반디집처럼 쓰는 가볍고 깔끔한 Windows 압축 프로그램</p>
+<p align="center">가볍고 깔끔한 Windows 압축 프로그램</p>
 
 <p align="center">Author: <b>Manggdy</b></p>
 

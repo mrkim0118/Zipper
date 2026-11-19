@@ -4,7 +4,7 @@
 
 <h1 align="center">Zipper</h1>
 
-<p align="center">A light, clean archive manager for Windows, in the spirit of Bandizip.</p>
+<p align="center">A light, clean archive manager for Windows.</p>
 
 <p align="center">Author: <b>Manggdy</b></p>
 

@@ -66,7 +66,7 @@ namespace Zipper
             return Path.Combine(Path.GetDirectoryName(archive), n.Length > 0 ? n : "extracted");
         }
 
-        /// <summary>Bandizip-style "smart" target: one top-level item -> extract here, otherwise into a new folder.</summary>
+        /// <summary>"Smart" target: one top-level item -> extract here, otherwise into a new folder.</summary>
         public static string SmartTarget(string archive, List<SevenZip.Entry> entries)
         {
             var roots = entries.Select(e => e.Path.Split('\\', '/')[0]).Distinct(StringComparer.OrdinalIgnoreCase).Count();
