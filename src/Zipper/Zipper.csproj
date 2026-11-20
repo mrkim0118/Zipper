@@ -22,4 +22,8 @@
     <None Include="..\..\ThirdParty\7-Zip\7z.dll" Link="7z.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="EggDotNet" Version="0.0.9" />
+  </ItemGroup>
+
 </Project>

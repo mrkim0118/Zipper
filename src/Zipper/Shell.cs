@@ -18,7 +18,7 @@ namespace Zipper
         public static readonly string[] Extensions =
         {
             "zip", "7z", "rar", "tar", "gz", "tgz", "bz2", "tbz2", "xz", "txz", "zst", "tzst", "lzma",
-            "cab", "iso", "wim", "arj", "lzh", "lha", "cpio", "rpm", "deb", "z", "taz", "xar", "zipx", "001",
+            "cab", "iso", "wim", "arj", "lzh", "lha", "cpio", "rpm", "deb", "z", "taz", "xar", "zipx", "001", "egg", "alz",
         };
 
         // ---- settings ----

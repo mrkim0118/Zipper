@@ -61,6 +61,16 @@ try {
     & $7z a -ttar "$work\t.tar" "$src\가.txt" -bso0 -bsp0; & $7z a -tgzip "$work\t.tar.gz" "$work\t.tar" -bso0 -bsp0
     Run '/xfolder', "`"$work\t.tar.gz`""
     Check '.tar.gz -> folder "t"' (Test-Path "$work\t\t.tar")
+
+    # 6. ALZ / EGG (samples from the EggDotNet test suite, MIT)
+    Copy-Item "$root\tests\data\*" $work
+    Run '/xfolder', "`"$work\defaults.alz`""
+    Check 'alz: 6 files' ((Get-ChildItem "$work\defaults" -Recurse -File).Count -eq 6)
+    Check 'alz: content matches' ((Get-FileHash "$work\defaults\lorem_ipsum_short.txt").Hash -eq 'ACFE59AFCFFCBE68A4DEE454D11F5BF78DFDEE32C77A03C1A50CF384418FE38F')
+    Run '/xsmart', "`"$work\basic_deflate_folders.egg`""
+    Check 'egg (deflate, folders): 3 files' ((Get-ChildItem "$work\basic_deflate_folders" -Recurse -File).Count -eq 3)
+    Run '/xfolder', "`"$work\lzma_simple.egg`""
+    Check 'egg (lzma)' ((Get-Item "$work\lzma_simple\lorem_ipsum.txt").Length -eq 34446)
 }
 finally {
     if ($null -eq $oldOpen) { Remove-ItemProperty $key OpenFolder } else { Set-ItemProperty $key OpenFolder $oldOpen }

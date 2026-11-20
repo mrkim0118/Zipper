@@ -46,6 +46,7 @@ namespace Zipper
         public static Result Run(IList<string> args, string password = null, Action<int, string> progress = null,
                                  Func<bool> cancelled = null, string workDir = null)
         {
+            if (Egg.Handles(args)) return Egg.Run(args, password, progress, cancelled);
             var all = new List<string> { args[0], "-sccUTF-8", "-scsUTF-8", "-bsp1", "-bso1", "-bse1" };
             all.AddRange(args.Skip(1));
             var psi = new ProcessStartInfo(Exe, string.Join(" ", all.Select(Quote)))

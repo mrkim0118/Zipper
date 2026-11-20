@@ -56,23 +56,24 @@ namespace Zipper
             nav.ImageScalingSize = new Size(small, small);
             icons.ImageSize = new Size(small, small);
             list.SmallImageList = icons;
-            ToolStripButton Tool(string text, char glyph, Color color, string tip, Action click)
+            ToolStripButton Tool(string text, Image image, string tip, Action click)
             {
-                var b = new ToolStripButton(text, Ui.Glyph(glyph, big, color), (s, e) => click())
+                var b = new ToolStripButton(text, image, (s, e) => click())
                 {
                     TextImageRelation = TextImageRelation.ImageAboveText, ToolTipText = tip, Padding = new Padding(8, 2, 8, 2), AutoSize = true,
                 };
                 tools.Items.Add(b);
                 return b;
             }
-            Tool("열기", '', Color.FromArgb(232, 163, 23), "압축 파일 열기 (Ctrl+O)", OpenDialog);
-            btnExtract = Tool("압축 풀기", '', Color.FromArgb(46, 158, 79), "선택한 항목 또는 전체 풀기 (Ctrl+E)", ExtractSelected);
-            Tool("새로 압축", '', Ui.Accent, "파일을 골라 새 압축 파일 만들기 (Ctrl+N)", NewArchive);
+            ToolStripButton GlyphTool(string text, char glyph, Color color, string tip, Action click) => Tool(text, Ui.Glyph(glyph, big, color), tip, click);
+            GlyphTool("열기", '', Color.FromArgb(232, 163, 23), "압축 파일 열기 (Ctrl+O)", OpenDialog);
+            btnExtract = Tool("압축 풀기", Ui.ArchiveIcon(big, true), "선택한 항목 또는 전체 풀기 (Ctrl+E)", ExtractSelected);
+            Tool("새로 압축", Ui.ArchiveIcon(big, false), "파일을 골라 새 압축 파일 만들기 (Ctrl+N)", NewArchive);
             tools.Items.Add(new ToolStripSeparator());
-            btnAdd = Tool("파일 추가", '', Ui.Accent, "열린 압축 파일에 파일 추가", AddDialog);
-            btnDelete = Tool("삭제", '', Color.FromArgb(214, 60, 60), "선택한 항목을 압축 파일에서 삭제 (Delete)", DeleteSelected);
-            btnTest = Tool("테스트", '', Color.FromArgb(0, 140, 150), "압축 파일 손상 검사", TestArchive);
-            var settings = Tool("설정", '', Color.FromArgb(110, 110, 110), "파일 연결과 탐색기 메뉴 설정", ShowSettings);
+            btnAdd = GlyphTool("파일 추가", '', Ui.Accent, "열린 압축 파일에 파일 추가", AddDialog);
+            btnDelete = GlyphTool("삭제", '', Color.FromArgb(214, 60, 60), "선택한 항목을 압축 파일에서 삭제 (Delete)", DeleteSelected);
+            btnTest = GlyphTool("테스트", '', Color.FromArgb(0, 140, 150), "압축 파일 손상 검사", TestArchive);
+            var settings = GlyphTool("설정", '', Color.FromArgb(110, 110, 110), "파일 연결과 탐색기 메뉴 설정", ShowSettings);
             settings.Alignment = ToolStripItemAlignment.Right;
 
             btnUp = new ToolStripButton("", Ui.Glyph('', small, SystemColors.ControlText), (s, e) => GoUp()) { ToolTipText = "상위 폴더 (Backspace)" };
@@ -223,10 +224,10 @@ namespace Zipper
                         + $"   ·   압축 {Ui.Size(ArchiveBytes())}   ·   {type}";
         }
 
-        /// <summary>Size on disk, counting every volume of a split archive (a.7z.001…, a.part1.rar…, a.zip + a.z01…).</summary>
+        /// <summary>Size on disk, counting every volume of a split archive (a.7z.001…, a.part1.rar…, a.zip + a.z01…, a.vol1.egg…, a.alz + a.a00…).</summary>
         long ArchiveBytes()
         {
-            const string volume = @"(\.\d{3}|\.part\d+\.rar|\.zip|\.z\d\d)$";
+            const string volume = @"(\.\d{3}|\.part\d+\.rar|\.zip|\.z\d\d|\.vol\d+\.egg|\.alz|\.a\d\d)$";
             var name = Path.GetFileName(archive);
             var stem = Regex.Replace(name, volume, "", RegexOptions.IgnoreCase);
             if (stem == name) return new FileInfo(archive).Length;

@@ -93,7 +93,20 @@ try {
     $p = Start-Process $exe -PassThru
     $main = Wait-Window 'Zipper'
     Shot $main 'main-empty'
-    $p.CloseMainWindow() | Out-Null
+    $p.CloseMainWindow() | Out-Null; $p.WaitForExit(5000) | Out-Null
+
+    # 4. AES-256 encrypted EGG: wrong password must not leave files, right one extracts
+    Copy-Item "$root\tests\data\lorem_long_aes256.egg" $work
+    $p = Start-Process $exe -ArgumentList '/xfolder', "`"$work\lorem_long_aes256.egg`"" -PassThru
+    $w = Wait-Window '암호 입력'; Front $w
+    Paste-Text 'wrong'; Keys '{ENTER}'
+    Start-Sleep 2
+    Check 'egg: wrong password leaves nothing' (-not (Test-Path "$work\lorem_long_aes256"))
+    $w = Wait-Window '암호 입력'; Front $w
+    Paste-Text 'password12345!'; Keys '{ENTER}'
+    $p.WaitForExit(20000) | Out-Null
+    $txt = Get-ChildItem "$work\lorem_long_aes256" -Recurse -File -ErrorAction SilentlyContinue
+    Check 'egg: AES-256 extracts with password' ($txt.Count -ge 1 -and ($txt | Where-Object Name -eq 'lorem_ipsum_long.txt').Length -gt 15000)
 }
 finally {
     Get-Process Zipper -ErrorAction SilentlyContinue | Stop-Process -Force

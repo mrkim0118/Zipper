@@ -56,12 +56,12 @@ namespace Zipper
             return true;
         }
 
-        /// <summary>Folder name for "extract to new folder": a.tar.gz -> a, b.part1.rar -> b, c.7z.001 -> c.</summary>
+        /// <summary>Folder name for "extract to new folder": a.tar.gz -> a, b.part1.rar -> b, c.7z.001 -> c, d.vol1.egg -> d.</summary>
         public static string FolderFor(string archive)
         {
             var n = Path.GetFileName(archive);
             n = Regex.Replace(n, @"\.\d{3}$", "");
-            n = Regex.Replace(n, @"(\.part\d+)?\.[^.]+$", "", RegexOptions.IgnoreCase);
+            n = Regex.Replace(n, @"(\.part\d+|\.vol\d+)?\.[^.]+$", "", RegexOptions.IgnoreCase);
             n = Regex.Replace(n, @"\.tar$", "", RegexOptions.IgnoreCase).Trim();
             return Path.Combine(Path.GetDirectoryName(archive), n.Length > 0 ? n : "extracted");
         }

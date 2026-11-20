@@ -21,13 +21,13 @@ Run `Installer/Output/ZipperSetup-1.0.0.exe` (built with `build.ps1`). It instal
 ## Features
 
 - **Browse archives like folders**: open any archive, walk its folders, sort by name, size, type or date, and double-click a file to open it.
-- **Extract many formats**: zip, 7z, rar/rar5, tar, gz/tgz, bz2, xz, zst, lzma, cab, iso, wim, arj, lzh, cpio, rpm, deb, xar, z and more.
+- **Extract many formats**: zip, 7z, rar/rar5, tar, gz/tgz, bz2, xz, zst, lzma, cab, iso, wim, arj, lzh, cpio, rpm, deb, xar, z and more, plus the Korean ALZ and EGG formats (including encrypted and split ones).
 - **Create archives**: zip, 7z, tar, gz, bz2, xz and wim, with 6 compression levels.
 - **Split archives**: create volumes of any size (10 MB, 700 MB CD, 4092 MB FAT32, or a custom size such as `50 MB`), and open `.001`, `.z01` and `.part1.rar` sets directly.
 - **Passwords**: ZipCrypto or AES-256 for zip, AES-256 with encrypted file names for 7z. A wrong password is caught before extraction, so no empty files are left behind.
 - **Smart extract**: one top-level item goes next to the archive; several items go into a new folder named after the archive.
 - **Explorer menu**: a Zipper submenu with smart extract, extract here, extract to a new folder, extract to…, compress…, and one-click ZIP / 7Z. Selecting many files makes one archive.
-- **Default program**: associate 27 archive types with Zipper from Settings or the installer.
+- **Default program**: associate 29 archive types with Zipper from Settings or the installer.
 - **Drag and drop**: drop an archive to open it, drop files to compress them or add them to the open archive, drag files out of an archive into Explorer.
 - **Edit and test**: add files to and delete files from zip, 7z, tar and wim archives; test an archive for damage.
 - **Safe defaults**: existing files are kept by renaming the new one, unless you choose overwrite or skip.
@@ -81,7 +81,7 @@ Windows only lets the user confirm a new default app. After turning on associati
 
 ## Limitations
 
-- ALZ and EGG (Korean formats) are not supported; the 7-Zip engine cannot read them.
+- ALZ and EGG are extract-only: they cannot be created, and files cannot be added to or deleted from them.
 - RAR can be extracted but not created (RAR creation needs the commercial WinRAR).
 - The Explorer menu uses the classic menu, so on Windows 11 it appears under **Show more options**.
 - Files dropped into an open archive are added at its root, not the folder you are viewing.
@@ -123,6 +123,7 @@ Raise `Version` in `src/Zipper/Zipper.csproj` and `AppVersion` in `Installer/Zip
 | `src/Zipper/MainForm.cs` | Archive browser window |
 | `src/Zipper/Dialogs.cs` | Compress, extract and settings dialogs |
 | `src/Zipper/ProgressForm.cs` | Progress window with cancel |
+| `src/Zipper/Egg.cs` | ALZ / EGG reader with the same commands and output as the 7z wrapper |
 | `src/Zipper/Ops.cs` | Extract / compress operations and password check |
 | `src/Zipper/SevenZip.cs` | 7z.exe wrapper: runs commands, parses listings and progress |
 | `src/Zipper/Shell.cs` | Settings, file associations, Explorer menu |
@@ -131,9 +132,11 @@ Raise `Version` in `src/Zipper/Zipper.csproj` and `AppVersion` in `Installer/Zip
 | `Installer/Zipper.iss` | Inno Setup script |
 | `Assets` | Icon, icon generator, screenshots |
 | `tests` | CLI and GUI end-to-end tests |
+| `tests/data` | ALZ / EGG samples from the EggDotNet test suite |
 | `build.ps1` | Builds the app and the installer |
 
 ## Libraries
 
 - [7-Zip](https://www.7-zip.org/) by Igor Pavlov — compression engine (GNU LGPL, with the unRAR restriction; see `ThirdParty/7-Zip/License.txt`)
+- [EggDotNet](https://github.com/akolman/EggDotNet) by Andrew Kolman — ALZ / EGG extraction (MIT)
 - [Inno Setup](https://jrsoftware.org/isinfo.php) — installer

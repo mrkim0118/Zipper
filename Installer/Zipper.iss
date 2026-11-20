@@ -31,8 +31,8 @@ Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
-korean.AssocTask=압축 파일을 Zipper로 열기 (zip, 7z, rar 등 27가지)
-english.AssocTask=Open archives with Zipper (zip, 7z, rar and 24 more)
+korean.AssocTask=압축 파일을 Zipper로 열기 (zip, 7z, rar, egg, alz 등 29가지)
+english.AssocTask=Open archives with Zipper (zip, 7z, rar, egg, alz and 24 more)
 korean.MenuTask=탐색기 오른쪽 클릭 메뉴에 Zipper 추가
 english.MenuTask=Add Zipper to the Explorer context menu
 korean.Integration=Windows 연동:
@@ -52,6 +52,8 @@ Source: "{#Bin}\Zipper.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Bin}\Zipper.exe.config"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Bin}\7z.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Bin}\7z.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Bin}\EggDotNet.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\ThirdParty\EggDotNet-License.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\ThirdParty\7-Zip\License.txt"; DestDir: "{app}"; DestName: "7-Zip License.txt"; Flags: ignoreversion
 
 [Icons]

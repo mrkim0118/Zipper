@@ -34,6 +34,82 @@ namespace Zipper
             return bmp;
         }
 
+        /// <summary>
+        /// Toolbar icon in the app icon's style: a navy box with a silver zipper and a round badge.
+        /// extract: zipper opened below the slider + green "out" arrow; otherwise closed zipper + blue plus.
+        /// </summary>
+        public static Bitmap ArchiveIcon(int size, bool extract)
+        {
+            var bmp = new Bitmap(size, size);
+            using (var g = Graphics.FromImage(bmp))
+            using (var silver = new SolidBrush(Color.FromArgb(226, 231, 238)))
+            using (var edge = new Pen(Color.FromArgb(120, 130, 146), 0.6f))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.ScaleTransform(size / 32f, size / 32f); // draw in a 32-unit grid
+                using (var box = Round(2.5f, 3.5f, 23, 25, 4.5f))
+                using (var fill = new System.Drawing.Drawing2D.LinearGradientBrush(new PointF(0, 3), new PointF(0, 29), Color.FromArgb(52, 82, 150), Color.FromArgb(18, 34, 80)))
+                {
+                    g.FillPath(fill, box);
+                    g.SetClip(box);
+                    float cx = 14, open = extract ? 14 : 99;
+                    using (var tape = new SolidBrush(Color.FromArgb(10, 20, 50)))
+                    {   // the tape splits with the teeth below the slider, showing the box in between
+                        g.FillRectangle(tape, cx - 3.5f, 0, 7, Math.Min(open, 32));
+                        float s = (32 - open) * 0.45f;
+                        if (extract)
+                        {
+                            g.FillPolygon(tape, new[] { new PointF(cx - 3.5f, open), new PointF(cx, open), new PointF(cx - s, 32), new PointF(cx - 3.5f - s, 32) });
+                            g.FillPolygon(tape, new[] { new PointF(cx, open), new PointF(cx + 3.5f, open), new PointF(cx + 3.5f + s, 32), new PointF(cx + s, 32) });
+                        }
+                    }
+                    for (float y = 4; y < 30; y += 3)
+                        for (int side = -1; side <= 1; side += 2)
+                        {
+                            float ty = y + (side > 0 ? 1.5f : 0), dx = ty > open ? (ty - open) * 0.45f : 0;
+                            var r = new RectangleF(side < 0 ? cx - 3 - dx : cx - 0.5f + dx, ty, 3.5f, 1.8f);
+                            if (ty > open) r.X += side * 0.6f; // parted teeth sit on their own strip
+                            g.FillRectangle(silver, r);
+                        }
+                    g.ResetClip();
+                    if (extract) // slider where the zipper parts
+                    {
+                        var slider = new[] { new PointF(cx - 3.5f, 10), new PointF(cx + 3.5f, 10), new PointF(cx + 2.2f, 15.5f), new PointF(cx - 2.2f, 15.5f) };
+                        g.FillPolygon(silver, slider); g.DrawPolygon(edge, slider);
+                    }
+                }
+                // badge
+                var badge = extract ? Color.FromArgb(34, 150, 78) : Color.FromArgb(30, 110, 220);
+                using (var b = new SolidBrush(badge)) g.FillEllipse(b, 17.5f, 17.5f, 13.5f, 13.5f);
+                using (var ring = new Pen(Color.White, 1.6f)) g.DrawEllipse(ring, 17.5f, 17.5f, 13.5f, 13.5f);
+                using (var w = new Pen(Color.White, 2f) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round })
+                {
+                    if (extract)
+                    {   // arrow leaving the box, up and to the right
+                        g.DrawLine(w, 21, 27.5f, 27.2f, 21.3f);
+                        g.DrawLine(w, 27.2f, 21.3f, 22.6f, 21.3f);
+                        g.DrawLine(w, 27.2f, 21.3f, 27.2f, 25.9f);
+                    }
+                    else
+                    {
+                        g.DrawLine(w, 24.25f, 20.8f, 24.25f, 27.7f);
+                        g.DrawLine(w, 20.8f, 24.25f, 27.7f, 24.25f);
+                    }
+                }
+            }
+            return bmp;
+        }
+
+        static System.Drawing.Drawing2D.GraphicsPath Round(float x, float y, float w, float h, float r)
+        {
+            var p = new System.Drawing.Drawing2D.GraphicsPath();
+            float d = 2 * r;
+            p.AddArc(x, y, d, d, 180, 90); p.AddArc(x + w - d, y, d, d, 270, 90);
+            p.AddArc(x + w - d, y + h - d, d, d, 0, 90); p.AddArc(x, y + h - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
+        }
+
         public static int Scale(Control c, int px) => px * c.DeviceDpi / 96;
 
         // ---- shell file icons for the list view, cached per extension ----
