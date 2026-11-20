@@ -16,7 +16,7 @@ Zipper opens, extracts and creates archives — zip, 7z, rar, tar, gz, iso and m
 
 ## Download
 
-Run `Installer/Output/ZipperSetup-1.0.0.exe` (built with `build.ps1`). It installs per user without admin rights; choose "install for all users" in the first dialog if you want that.
+Get `ZipperSetup-<version>.exe` from the [Releases](https://github.com/mrkim0118/Zipper/releases/latest) page and run it. It installs per user without admin rights; choose "install for all users" in the first dialog if you want that.
 
 ## Features
 

@@ -16,7 +16,7 @@ Zipper는 zip, 7z, rar, tar, gz, iso 등 20가지가 넘는 형식과 분할 압
 
 ## 다운로드
 
-`Installer/Output/ZipperSetup-1.0.0.exe`를 실행하세요(`build.ps1`로 만듭니다). 관리자 권한 없이 현재 사용자에게 설치되며, 모든 사용자에게 설치하려면 첫 화면에서 고르면 됩니다.
+[Releases](https://github.com/mrkim0118/Zipper/releases/latest) 페이지에서 `ZipperSetup-<버전>.exe`를 받아 실행하세요. 관리자 권한 없이 현재 사용자에게 설치되며, 모든 사용자에게 설치하려면 첫 화면에서 고르면 됩니다.
 
 ## 주요 기능
 
