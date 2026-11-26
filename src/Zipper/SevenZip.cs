@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -16,6 +17,7 @@ namespace Zipper
 
         public class Result
         {
+            public const int FatalError = 2;
             public int ExitCode;
             public string Output = "";
             public bool Cancelled;
@@ -106,6 +108,137 @@ namespace Zipper
             }
             if (r.ExitCode == 255) r.Cancelled = r.Cancelled || !r.NeedsPassword;
             return r;
+        }
+
+        // A hard link lets 7-Zip read a large file under its archive name without copying its contents.
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        static extern bool CreateHardLink(string newFile, string existingFile, IntPtr securityAttributes);
+
+        /// <summary>Creates or updates an archive. With renameExe, file entries ending in .exe are stored as .ex.</summary>
+        public static Result Add(IList<string> options, string output, string[] files, string password,
+                                 Action<int, string> progress, Func<bool> cancelled, ISet<string> existing = null,
+                                 bool replaceExisting = false, bool renameExe = false)
+        {
+            string stage = Path.Combine(Path.GetTempPath(), "zipper-" + Guid.NewGuid().ToString("N"));
+            string list = null;
+            List<string> readOnlyCopies = new List<string>();
+            try
+            {
+                List<string> inputs = new List<string>();
+                HashSet<string> rootNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                output = Path.GetFullPath(output);
+                List<string> sources = new List<string>();
+                foreach (string file in files)
+                {
+                    string path = Path.GetFullPath(file);
+                    if (Directory.Exists(path) && new DirectoryInfo(path).Parent == null)
+                        sources.AddRange(Directory.GetFileSystemEntries(path).Where(child => !string.Equals(child, output, StringComparison.OrdinalIgnoreCase)));
+                    else
+                        sources.Add(path.TrimEnd(Path.DirectorySeparatorChar));
+                }
+                foreach (string source in sources)
+                {
+                    List<(FileSystemInfo Source, string Name)> entries = new List<(FileSystemInfo, string)>();
+                    bool renamed = false;
+
+                    // Collect first so a temporary directory inside a selected folder cannot be archived.
+                    void Collect(FileSystemInfo item, string parent)
+                    {
+                        if (cancelled()) throw new OperationCanceledException();
+                        if (string.Equals(item.FullName, stage, StringComparison.OrdinalIgnoreCase)) return;
+                        if (string.Equals(item.FullName, output, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (parent.Length == 0) throw new IOException("압축 대상과 저장할 압축 파일의 경로가 같습니다.");
+                            return;
+                        }
+                        string name = item.Name;
+                        DirectoryInfo directory = item as DirectoryInfo;
+                        if (renameExe && directory == null && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // app.exe -> app.ex (keeps the original case). If app.ex is already taken, by a file next
+                            // to it or by an entry of the archive being updated, use "app (2).ex" and so on.
+                            string ex = name.Substring(name.Length - 4, 3), stem = name.Substring(0, name.Length - 4);
+                            string dir = Path.GetDirectoryName(item.FullName);
+                            bool Taken(string n) => File.Exists(Path.Combine(dir, n)) || Directory.Exists(Path.Combine(dir, n))
+                                                    || (existing != null && existing.Contains(Path.Combine(parent, n)));
+                            name = stem + ex;
+                            for (int i = 2; Taken(name); i++) name = $"{stem} ({i}){ex}";
+                            renamed = true;
+                        }
+                        string path = Path.Combine(parent, name);
+                        entries.Add((item, path));
+                        if (directory != null)
+                            foreach (FileSystemInfo child in directory.EnumerateFileSystemInfos()) Collect(child, path);
+                    }
+
+                    if (Directory.Exists(source)) Collect(new DirectoryInfo(source), "");
+                    else Collect(new FileInfo(source), "");
+                    string rootName = entries[0].Name;
+                    if (!rootNames.Add(rootName)) throw new IOException("압축할 이름이 겹칩니다: " + rootName);
+                    bool containsStage = stage.StartsWith(source + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+                    if (!renamed && !containsStage)
+                    {
+                        inputs.Add(source);
+                        continue;
+                    }
+
+                    HashSet<string> names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    Directory.CreateDirectory(stage);
+                    foreach ((FileSystemInfo item, string name) in entries)
+                    {
+                        if (cancelled()) throw new OperationCanceledException();
+                        if (!names.Add(name)) throw new IOException("압축할 이름이 겹칩니다: " + name);
+                        string dest = Path.Combine(stage, name);
+                        if (item is DirectoryInfo)
+                        {
+                            Directory.CreateDirectory(dest);
+                            continue;
+                        }
+                        // A read-only hard link cannot be removed without changing the source attributes.
+                        FileAttributes attributes = item.Attributes;
+                        bool linked = false;
+                        if ((attributes & (FileAttributes.ReadOnly | FileAttributes.ReparsePoint)) == 0)
+                            linked = CreateHardLink(dest, item.FullName, IntPtr.Zero);
+                        if (!linked)
+                        {
+                            if ((attributes & FileAttributes.ReadOnly) != 0) readOnlyCopies.Add(dest);
+                            File.Copy(item.FullName, dest);
+                        }
+                    }
+                    for (int i = entries.Count - 1; i >= 0; i--)
+                        if (entries[i].Source is DirectoryInfo)
+                            Directory.SetLastWriteTimeUtc(Path.Combine(stage, entries[i].Name), entries[i].Source.LastWriteTimeUtc);
+                    inputs.Add(Path.Combine(stage, rootName));
+                }
+                if (cancelled()) throw new OperationCanceledException();
+                list = ListFile(inputs);
+                List<string> args = new List<string>(options) { output, "@" + list };
+                bool existed = File.Exists(output);
+                if (replaceExisting) File.Delete(output);
+                Result result = Run(args, password, progress, cancelled);
+                if (!result.Ok && !existed) DeletePartial(output);
+                return result;
+            }
+            catch (OperationCanceledException) { return new Result { Cancelled = true }; }
+            finally
+            {
+                if (list != null) File.Delete(list);
+                foreach (string copy in readOnlyCopies)
+                    if (File.Exists(copy)) File.SetAttributes(copy, FileAttributes.Normal);
+                if (Directory.Exists(stage)) Directory.Delete(stage, true);
+            }
+        }
+
+        /// <summary>Removes incomplete output after a failed compression command.</summary>
+        public static void DeletePartial(string output)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(output);
+                foreach (var f in Directory.GetFiles(dir, Path.GetFileName(output) + "*"))
+                    if (f == output || Regex.IsMatch(f.Substring(output.Length), @"^\.(\d{3}|tmp)$")) File.Delete(f);
+            }
+            catch { } // best effort: the user is already told the archive failed
         }
 
         /// <summary>Lists an archive (7z l -slt). type receives the archive format (zip, 7z, Rar5...).</summary>

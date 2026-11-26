@@ -15,13 +15,29 @@ function Names($archive) { (& $7z l -ba -slt -sccUTF-8 $archive | Select-String 
 # keep Explorer windows from popping up during the test
 $key = 'HKCU:\Software\Zipper'; New-Item $key -Force | Out-Null
 $oldOpen = (Get-ItemProperty $key -ErrorAction SilentlyContinue).OpenFolder
+$oldExe = (Get-ItemProperty $key -ErrorAction SilentlyContinue).RenameExe
 Set-ItemProperty $key OpenFolder 0
+Set-ItemProperty $key RenameExe 1
 try {
     $src = Join-Path $work '원본 폴더'; New-Item -ItemType Directory "$src\하위" | Out-Null
     Set-Content "$src\가.txt" '가나다' -Encoding UTF8
     Set-Content "$src\b c.txt" 'space name' -Encoding UTF8
     Set-Content "$src\하위\deep.txt" 'deep' -Encoding UTF8
     $big = New-Object byte[] (3MB); (New-Object Random 1).NextBytes($big); [IO.File]::WriteAllBytes("$src\big.bin", $big)
+
+    # With the option on, .exe file entries are stored as .ex (folders keep their names).
+    $nestedDir = New-Item -ItemType Directory "$src\하위\tools.exe"
+    Set-Content "$nestedDir\app.v2.ExE" 'nested executable fixture'
+    Set-Content "$src\run.EXE" 'top-level executable fixture'
+    Run '/czip', "`"$src\run.EXE`""
+    $single = Names "$src\run.zip"
+    Check 'ZIP stores .EXE as .EX' (($single -contains 'run.EX') -and ($single -notcontains 'run.EXE'))
+    Check 'original EXE is preserved' ((Get-Content "$src\run.EXE") -eq 'top-level executable fixture')
+    $off = New-Item -ItemType Directory "$work\exe-off"; Copy-Item "$src\run.EXE" $off
+    Set-ItemProperty $key RenameExe 0
+    Run '/czip', "`"$off\run.EXE`""
+    Check 'option off keeps .EXE' ((Names "$off\run.zip") -contains 'run.EXE')
+    Set-ItemProperty $key RenameExe 1
 
     # 1. multi-select quick zip: Explorer launches one process per item at once
     $ps = "$src\가.txt", "$src\b c.txt", "$src\하위" | ForEach-Object { Start-Process $exe -ArgumentList '/czip', "`"$_`"" -PassThru }
@@ -34,6 +50,9 @@ try {
     # 2. quick 7z of a folder
     Run '/c7z', "`"$src\하위`""
     Check '/c7z folder' ((Names "$src\하위.7z") -contains '하위\deep.txt')
+
+    $folderNames = Names "$src\하위.7z"
+    Check '7z keeps directory names and renames nested EXE to .Ex' (($folderNames -contains '하위\tools.exe\app.v2.Ex') -and ($folderNames -notcontains '하위\tools.exe\app.v2.ExE'))
 
     # 3. extract variants
     Run '/xfolder', "`"$zip`""
@@ -49,6 +68,8 @@ try {
     Run '/xhere', "`"$here\원본 폴더.zip`""  # default overwrite mode renames instead of overwriting
     Check 'existing files are kept (auto rename)' (Test-Path "$here\가_1.txt")
 
+    Check 'extracted executable bytes match the source' ((Get-FileHash "$here\하위\tools.exe\app.v2.Ex").Hash -eq (Get-FileHash "$nestedDir\app.v2.ExE").Hash)
+
     # 4. split archives made elsewhere
     & $7z a -t7z -v1m "$work\split.7z" "$src\big.bin" -bso0 -bsp0
     & $7z a -tzip -v1m "$work\split.zip" "$src\big.bin" -bso0 -bsp0
@@ -56,6 +77,35 @@ try {
     Check 'split .7z.001' ((Get-FileHash "$work\split\big.bin").Hash -eq (Get-FileHash "$src\big.bin").Hash)
     Run '/xfolder', "`"$work\split.zip.001`""
     Check 'split .zip.001' ((Get-FileHash "$work\split\big_1.bin").Hash -eq (Get-FileHash "$src\big.bin").Hash)
+
+    # 4b. tar.gz / tar.bz2 / tar.xz from a folder (made as tar, then compressed)
+    foreach ($t in 'tar.gz', 'tar.bz2', 'tar.xz') {
+        Run "/c:$t", "`"$src\하위`""
+        $out = "$src\하위.$t"
+        $unz = "$work\un-$t"; & $7z x $out "-o$unz" -bso0 -bsp0  # bz2/xz keep no inner name; 7-Zip derives 하위.tar
+        Check "$t holds 하위.tar with the folder" ((Test-Path "$unz\하위.tar") -and ((Names "$unz\하위.tar") -contains '하위\deep.txt'))
+    }
+    # 하위 now holds both app.v2.ExE and an extracted app.v2.Ex: the renamed entry must get a free name
+    Check '.ex rename avoids an existing .ex' ((Names "$unz\하위.tar") -contains '하위\tools.exe\app.v2 (2).Ex')
+    Run '/c:xz', "`"$src\가.txt`""
+    & $7z x "$src\가.xz" "-o$work\un-xz" -bso0 -bsp0
+    Check 'single-file xz' ((Get-Content "$work\un-xz\가") -eq '가나다')
+
+    # 4c. one archive per item
+    $ea = New-Item -ItemType Directory "$work\each"; 'a', 'b' | ForEach-Object { Set-Content "$ea\$_.txt" $_ }
+    $ps = 'a', 'b' | ForEach-Object { Start-Process $exe -ArgumentList '/ceach:zip', "`"$ea\$_.txt`"" -PassThru }
+    $ps | ForEach-Object { $_.WaitForExit(60000) | Out-Null }
+    Check '/ceach makes one zip per item' ((Test-Path "$ea\a.zip") -and (Test-Path "$ea\b.zip") -and -not (Test-Path "$ea\each.zip"))
+
+    # 4d. macOS names (decomposed Hangul) come out composed; the downloaded-file mark is kept
+    $mac = New-Item -ItemType Directory "$work\mac-src"   # not "mac": that is where mac.zip extracts to
+    $nfd = '폴더'.Normalize([Text.NormalizationForm]::FormD); $nfdFile = '한글.txt'.Normalize([Text.NormalizationForm]::FormD)
+    New-Item -ItemType Directory "$mac\$nfd" | Out-Null; Set-Content "$mac\$nfd\$nfdFile" 'mac'
+    & $7z a "$work\mac.zip" "$mac\$nfd" -bso0 -bsp0
+    Set-Content -Path "$work\mac.zip" -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+    Run '/xfolder', "`"$work\mac.zip`""
+    Check 'decomposed Hangul names are composed' ((Test-Path "$work\mac\폴더\한글.txt") -and -not (Test-Path "$work\mac\$nfd"))
+    Check 'extracted file keeps the internet zone mark' ([bool](Get-Item "$work\mac\폴더\한글.txt" -Stream Zone.Identifier -ErrorAction SilentlyContinue))
 
     # 5. tar.gz name handling
     & $7z a -ttar "$work\t.tar" "$src\가.txt" -bso0 -bsp0; & $7z a -tgzip "$work\t.tar.gz" "$work\t.tar" -bso0 -bsp0
@@ -71,9 +121,13 @@ try {
     Check 'egg (deflate, folders): 3 files' ((Get-ChildItem "$work\basic_deflate_folders" -Recurse -File).Count -eq 3)
     Run '/xfolder', "`"$work\lzma_simple.egg`""
     Check 'egg (lzma)' ((Get-Item "$work\lzma_simple\lorem_ipsum.txt").Length -eq 34446)
+    Set-Content -Path "$work\defaults.alz" -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+    Run '/xfolder', "`"$work\defaults.alz`""   # second run: files are renamed (_1), each gets the mark
+    Check 'alz extraction keeps the internet zone mark' ([bool](Get-Item "$work\defaults\lorem_ipsum_short_1.txt" -Stream Zone.Identifier -ErrorAction SilentlyContinue))
 }
 finally {
     if ($null -eq $oldOpen) { Remove-ItemProperty $key OpenFolder } else { Set-ItemProperty $key OpenFolder $oldOpen }
+    if ($null -eq $oldExe) { Remove-ItemProperty $key RenameExe } else { Set-ItemProperty $key RenameExe $oldExe }
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 if ($fail) { "$fail test(s) failed"; exit 1 } else { 'all passed' }

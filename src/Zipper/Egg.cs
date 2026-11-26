@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using EggDotNet;
@@ -29,6 +30,7 @@ namespace Zipper
             var archive = args.Skip(1).First(a => !a.StartsWith("-") && Ext.IsMatch(a));
             var dest = args.FirstOrDefault(a => a.StartsWith("-o"))?.Substring(2);
             var overwrite = args.FirstOrDefault(a => a.StartsWith("-ao")) ?? "-aoa";
+            var zone = args.Contains("-snz") ? ReadZone(archive) : null; // like 7-Zip's -snz
             var items = new List<string>();
             foreach (var a in args.Skip(args.IndexOf(archive) + 1).Where(a => !a.StartsWith("-")))
                 if (a.StartsWith("@")) items.AddRange(File.ReadAllLines(a.Substring(1), Encoding.UTF8).Where(l => l.Length > 0));
@@ -100,6 +102,7 @@ namespace Zipper
                                         }
                                     if (stopped) { File.Delete(target); r.Cancelled = true; break; }
                                 }
+                                if (zone != null) WriteZone(target, zone);
                                 try { File.SetLastWriteTime(target, e.LastWriteTime); } catch { }
                             }
                             catch (DecryptFailedException) { Error("Wrong password : " + path); }
@@ -129,6 +132,25 @@ namespace Zipper
             return Directory.GetFiles(Path.GetDirectoryName(path), stem + ".*")
                 .Where(f => !f.Equals(path, StringComparison.OrdinalIgnoreCase) && Volume.IsMatch(Path.GetFileName(f).Substring(stem.Length)))
                 .Select(f => (Stream)File.OpenRead(f)).ToList();
+        }
+
+        // ---- "Zone.Identifier" stream (the downloaded-from-the-internet mark); .NET Framework file APIs reject "file:stream" ----
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFile(string name, uint access, uint share, IntPtr security, uint mode, uint flags, IntPtr template);
+
+        static byte[] ReadZone(string file)
+        {
+            using (var h = CreateFile(file + ":Zone.Identifier", 0x80000000 /* GENERIC_READ */, 1, IntPtr.Zero, 3 /* OPEN_EXISTING */, 0, IntPtr.Zero))
+            {
+                if (h.IsInvalid) return null; // not downloaded
+                using (var f = new FileStream(h, FileAccess.Read)) using (var m = new MemoryStream()) { f.CopyTo(m); return m.ToArray(); }
+            }
+        }
+
+        static void WriteZone(string file, byte[] zone)
+        {
+            using (var h = CreateFile(file + ":Zone.Identifier", 0x40000000 /* GENERIC_WRITE */, 0, IntPtr.Zero, 2 /* CREATE_ALWAYS */, 0, IntPtr.Zero))
+                if (!h.IsInvalid) using (var f = new FileStream(h, FileAccess.Write)) f.Write(zone, 0, zone.Length);
         }
 
         static string Unique(string path)

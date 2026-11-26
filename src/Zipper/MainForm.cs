@@ -37,8 +37,30 @@ namespace Zipper
         readonly ToolStrip tools = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, RenderMode = ToolStripRenderMode.System, Padding = new Padding(6, 4, 6, 4) };
         readonly ToolStrip nav = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden, RenderMode = ToolStripRenderMode.System, Padding = new Padding(6, 2, 6, 2) };
         readonly ToolStripLabel pathLabel = new ToolStripLabel();
+        readonly ToolStripTextBox search = new ToolStripTextBox { Alignment = ToolStripItemAlignment.Right, ToolTipText = "압축 파일 안에서 이름으로 찾기 (Ctrl+F, 지우기: Esc)" };
+        string Filter => search.Text.Trim();
         readonly ToolStripStatusLabel status = new ToolStripStatusLabel { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
         readonly Control empty;
+        readonly FlowLayoutPanel recentPanel = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.TopDown, AutoSize = true, Anchor = AnchorStyles.None, Margin = new Padding(3, 18, 3, 3), WrapContents = false,
+        };
+
+        /// <summary>Up to five recent archives as links under the drop hint.</summary>
+        void FillRecent()
+        {
+            recentPanel.Controls.Clear();
+            var recent = Shell.Recent.Take(5).ToArray();
+            if (recent.Length == 0) return;
+            recentPanel.Controls.Add(new Label { Text = "최근에 연 압축 파일", AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(3, 3, 3, 6) });
+            foreach (var r in recent)
+            {
+                var link = new LinkLabel { Text = Path.GetFileName(r), AutoSize = true, Margin = new Padding(3, 2, 3, 2) };
+                new ToolTip().SetToolTip(link, r);
+                link.LinkClicked += (s, e) => OpenArchive(r);
+                recentPanel.Controls.Add(link);
+            }
+        }
         ToolStripButton btnExtract, btnAdd, btnDelete, btnTest, btnUp;
 
         public MainForm(string open)
@@ -66,7 +88,19 @@ namespace Zipper
                 return b;
             }
             ToolStripButton GlyphTool(string text, char glyph, Color color, string tip, Action click) => Tool(text, Ui.Glyph(glyph, big, color), tip, click);
-            GlyphTool("열기", '', Color.FromArgb(232, 163, 23), "압축 파일 열기 (Ctrl+O)", OpenDialog);
+            var openBtn = new ToolStripSplitButton("열기", Ui.Glyph('', big, Color.FromArgb(232, 163, 23)))
+            {
+                TextImageRelation = TextImageRelation.ImageAboveText, ToolTipText = "압축 파일 열기 (Ctrl+O), 화살표: 최근 파일", Padding = new Padding(8, 2, 8, 2), AutoSize = true,
+            };
+            openBtn.ButtonClick += (s, e) => OpenDialog();
+            openBtn.DropDownItems.Add("(없음)"); // keeps the arrow active; filled when opened
+            openBtn.DropDownOpening += (s, e) =>
+            {
+                openBtn.DropDownItems.Clear();
+                foreach (var r in Shell.Recent) openBtn.DropDownItems.Add(Path.GetFileName(r), null, (o, a) => OpenArchive(r)).ToolTipText = r;
+                if (openBtn.DropDownItems.Count == 0) openBtn.DropDownItems.Add("최근에 연 압축 파일이 없습니다").Enabled = false;
+            };
+            tools.Items.Add(openBtn);
             btnExtract = Tool("압축 풀기", Ui.ArchiveIcon(big, true), "선택한 항목 또는 전체 풀기 (Ctrl+E)", ExtractSelected);
             Tool("새로 압축", Ui.ArchiveIcon(big, false), "파일을 골라 새 압축 파일 만들기 (Ctrl+N)", NewArchive);
             tools.Items.Add(new ToolStripSeparator());
@@ -79,6 +113,15 @@ namespace Zipper
             btnUp = new ToolStripButton("", Ui.Glyph('', small, SystemColors.ControlText), (s, e) => GoUp()) { ToolTipText = "상위 폴더 (Backspace)" };
             nav.Items.Add(btnUp);
             nav.Items.Add(pathLabel);
+            search.Size = new Size(Ui.Scale(this, 200), search.Height);
+            search.TextChanged += (s, e) => { Fill(); SyncButtons(); };
+            search.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Escape) { search.Text = ""; list.Focus(); e.Handled = e.SuppressKeyPress = true; }
+                else if (e.KeyCode == Keys.Down || e.KeyCode == Keys.Enter) { list.Focus(); if (list.Items.Count > 0 && list.SelectedItems.Count == 0) list.Items[0].Selected = true; e.SuppressKeyPress = true; }
+            };
+            nav.Items.Add(search);
+            nav.Items.Add(new ToolStripLabel("검색") { Alignment = ToolStripItemAlignment.Right, ForeColor = SystemColors.GrayText });
 
             list.Columns.Add("이름", 340);
             list.Columns.Add("크기", 100, HorizontalAlignment.Right);
@@ -91,6 +134,9 @@ namespace Zipper
             list.ItemDrag += (s, e) => DragOut();
             list.SelectedIndexChanged += (s, e) => SyncButtons();
             list.ContextMenuStrip = BuildMenu();
+            list.LabelEdit = true;
+            list.BeforeLabelEdit += (s, e) => { if (!CanRename) e.CancelEdit = true; };
+            list.AfterLabelEdit += (s, e) => { e.CancelEdit = true; if (e.Label != null) Rename((Node)list.Items[e.Item].Tag, e.Label.Trim()); };
 
             var strip = new StatusStrip { SizingGrip = true };
             strip.Items.Add(status);
@@ -118,8 +164,9 @@ namespace Zipper
         // ---------- layout pieces ----------
         Control BuildEmpty()
         {
-            var t = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = SystemColors.Window, ColumnCount = 1, RowCount = 4, AllowDrop = true };
+            var t = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = SystemColors.Window, ColumnCount = 1, RowCount = 5, AllowDrop = true };
             t.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             t.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
@@ -133,6 +180,7 @@ namespace Zipper
             t.Controls.Add(new Label(), 0, 0);
             t.Controls.Add(pic, 0, 1);
             t.Controls.Add(label, 0, 2);
+            t.Controls.Add(recentPanel, 0, 3);
             return t;
         }
 
@@ -144,11 +192,14 @@ namespace Zipper
             m.Items.Add("압축 풀기...", null, (s, e) => ExtractSelected());
             m.Items.Add("압축 파일 위치에 풀기", null, (s, e) => ExtractTo(Path.GetDirectoryName(archive)));
             m.Items.Add(new ToolStripSeparator());
+            var ren = m.Items.Add("이름 바꾸기", null, (s, e) => BeginRename());
+            ((ToolStripMenuItem)ren).ShortcutKeyDisplayString = "F2";
             var del = m.Items.Add("삭제", null, (s, e) => DeleteSelected());
             m.Opening += (s, e) =>
             {
                 e.Cancel = archive == null || Selected().Count == 0;
                 del.Enabled = btnDelete.Enabled;
+                ren.Enabled = CanRename;
             };
             return m;
         }
@@ -162,6 +213,9 @@ namespace Zipper
             else if (e.KeyCode == Keys.Back && list.Focused) GoUp();
             else if (e.KeyCode == Keys.Delete && list.Focused && btnDelete.Enabled) DeleteSelected();
             else if (e.KeyCode == Keys.F5 && archive != null) Reload();
+            else if (e.KeyCode == Keys.F2 && list.Focused && CanRename) BeginRename();
+            else if (e.Control && e.KeyCode == Keys.F && archive != null) { search.Focus(); search.SelectAll(); }
+            else if (e.KeyCode == Keys.Escape && Filter.Length > 0) search.Text = "";
             else return;
             e.Handled = true;
         }
@@ -176,6 +230,8 @@ namespace Zipper
             {
                 if (!Ops.Open(this, path, ref pw, out var entries, out var t)) return;
                 archive = path; password = pw; type = t;
+                try { Shell.AddRecent(path); } catch { } // a full or locked registry must not block opening
+                search.Text = "";
                 Build(entries);
                 current = root;
                 ShowArchive();
@@ -245,7 +301,7 @@ namespace Zipper
             list.Visible = has;
             nav.Visible = has;
             Text = has ? Path.GetFileName(archive) + " - Zipper" : "Zipper";
-            if (!has) status.Text = "준비";
+            if (!has) { status.Text = "준비"; FillRecent(); }
             Fill();
             SyncButtons();
         }
@@ -256,25 +312,32 @@ namespace Zipper
             list.Items.Clear();
             if (current != null)
             {
-                pathLabel.Text = Path.GetFileName(archive) + (current == root ? "" : "  ›  " + current.FullPath.Replace("\\", "  ›  ")); // "\" renders as ₩ in Korean fonts
-                if (current != root) list.Items.Add(new ListViewItem("..", Ui.IconKey(icons, "", true)) { Tag = current.Parent });
+                // searching lists matches from the whole archive with their folder path; otherwise the current folder
+                bool searching = Filter.Length > 0;
+                var shown = searching
+                    ? Flatten(root).Where(n => n.Name.Normalize().IndexOf(Filter, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                    : current.Kids.Values;
+                pathLabel.Text = searching ? $"\"{Filter}\" 검색 결과: {shown.Count():N0}개"
+                    : Path.GetFileName(archive) + (current == root ? "" : "  ›  " + current.FullPath.Normalize().Replace("\\", "  ›  ")); // "\" renders as ₩ in Korean fonts
+                if (current != root && !searching) list.Items.Add(new ListViewItem("..", Ui.IconKey(icons, "", true)) { Tag = current.Parent });
                 Func<Node, IComparable> key = sortColumn == 1 ? n => n.Size : sortColumn == 2 ? n => n.Packed
                     : sortColumn == 3 ? n => Ui.TypeName(Ui.IconKey(icons, n.Name, n.IsDir)) : sortColumn == 4 ? n => n.Modified ?? DateTime.MinValue
                     : (Func<Node, IComparable>)(n => n.Name.ToLowerInvariant());
-                var kids = current.Kids.Values.OrderBy(n => n.IsDir ? 0 : 1);
+                var kids = shown.OrderBy(n => n.IsDir ? 0 : 1);
                 kids = sortDesc ? kids.ThenByDescending(key) : kids.ThenBy(key);
                 foreach (var n in kids)
                 {
                     var ik = Ui.IconKey(icons, n.Name, n.IsDir);
                     list.Items.Add(new ListViewItem(new[]
                     {
-                        n.Name, n.IsDir ? "" : Ui.Size(n.Size), n.IsDir ? "" : Ui.Size(n.Packed),
+                        // search results show the folder path; "\" would render as ₩ in Korean fonts
+                        (searching ? n.FullPath.Replace("\\", "  ›  ") : n.Name).Normalize(), n.IsDir ? "" : Ui.Size(n.Size), n.IsDir ? "" : Ui.Size(n.Packed),
                         Ui.TypeName(ik), n.Modified?.ToString("yyyy-MM-dd HH:mm") ?? "",
                     }, ik) { Tag = n });
                 }
             }
             list.EndUpdate();
-            btnUp.Enabled = current != null && current != root;
+            btnUp.Enabled = current != null && (current != root || Filter.Length > 0);
         }
 
         bool Updatable => archive != null && Regex.IsMatch(type ?? "", "^(zip|7z|tar|wim)$", RegexOptions.IgnoreCase)
@@ -289,19 +352,52 @@ namespace Zipper
 
         List<Node> Selected() => list.SelectedItems.Cast<ListViewItem>().Where(i => i.Text != "..").Select(i => (Node)i.Tag).ToList();
 
+        // ---------- rename ----------
+        /// <summary>One item, in an archive 7-Zip can update, outside the search results (they show full paths).</summary>
+        bool CanRename => Updatable && Filter.Length == 0 && Selected().Count == 1;
+
+        void BeginRename()
+        {
+            var item = list.SelectedItems.Cast<ListViewItem>().FirstOrDefault(i => i.Text != "..");
+            item?.BeginEdit();
+        }
+
+        void Rename(Node n, string name)
+        {
+            if (name.Length == 0 || name == n.Name) return;
+            if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name == "." || name == "..")
+            {
+                Ui.Error(this, "파일 이름에 쓸 수 없는 문자가 있습니다: \\ / : * ? \" < > |");
+                return;
+            }
+            if (n.Parent.Kids.TryGetValue(name, out var other) && other != n)
+            {
+                Ui.Error(this, $"같은 이름의 항목이 이미 있습니다: {name}");
+                return;
+            }
+            var parent = n.FullPath.Contains('\\') ? n.FullPath.Substring(0, n.FullPath.LastIndexOf('\\') + 1) : "";
+            // 7-Zip renames a folder's contents along with it
+            var r = ProgressForm.Run(this, "이름 바꾸는 중", new[] { "rn", archive, n.FullPath, parent + name }, password ?? "");
+            if (!r.Ok && !r.Cancelled) Ui.Error(this, "이름을 바꾸지 못했습니다.\n\n" + r.Errors);
+            Reload();
+            var renamed = list.Items.Cast<ListViewItem>().FirstOrDefault(i => i.Text == name.Normalize());
+            if (renamed != null) { renamed.Selected = renamed.Focused = true; renamed.EnsureVisible(); }
+        }
+
         // ---------- navigation ----------
         void OpenItem(Node n)
         {
             if (n == null) return;
-            if (n.IsDir) { current = n; Fill(); SyncButtons(); return; }
+            if (n.IsDir) { current = n; if (Filter.Length > 0) search.Text = ""; Fill(); SyncButtons(); return; }
             var dir = Path.Combine(tempRoot, Guid.NewGuid().ToString("N").Substring(0, 8));
             if (!Ops.Extract(this, archive, dir, new[] { n.FullPath }, password, false, "-aoa", flat: true)) return;
-            try { Process.Start(new ProcessStartInfo(Path.Combine(dir, n.Name)) { UseShellExecute = true }); }
+            try { Process.Start(new ProcessStartInfo(Ops.OnDisk(Path.Combine(dir, n.Name))) { UseShellExecute = true }); }
             catch (Exception ex) { Ui.Error(this, ex.Message); }
         }
 
         void GoUp()
         {
+            if (Filter.Length > 0) { search.Text = ""; return; } // first leave the search results
             if (current?.Parent == null) return;
             var from = current;
             current = current.Parent;
@@ -323,11 +419,14 @@ namespace Zipper
             var sel = Selected();
             using (var f = new ExtractForm(archive, sel.Count))
                 if (f.ShowDialog(this) == DialogResult.OK)
-                    Ops.Extract(this, archive, f.Dest, sel.Select(n => n.FullPath).ToList(), password, f.OpenFolder, f.OverwriteSwitch);
+                    Ops.Extract(this, archive, f.Dest, sel.Select(n => n.FullPath).ToList(), password, f.OpenFolder, f.OverwriteSwitch, total: Bytes(sel));
         }
 
         void ExtractTo(string dest) =>
-            Ops.Extract(this, archive, dest, Selected().Select(n => n.FullPath).ToList(), password, Shell.OpenFolderAfterExtract);
+            Ops.Extract(this, archive, dest, Selected().Select(n => n.FullPath).ToList(), password, Shell.OpenFolderAfterExtract, total: Bytes(Selected()));
+
+        /// <summary>Uncompressed bytes of the selection (everything when nothing is selected), for the speed display.</summary>
+        long Bytes(List<Node> sel) => (sel.Count == 0 ? new List<Node> { root } : sel).Sum(n => n.IsDir ? Flatten(n).Sum(k => k.Size) : n.Size);
 
         void NewArchive()
         {
@@ -340,7 +439,7 @@ namespace Zipper
             using (var f = new CompressForm(files, "zip"))
             {
                 if (f.ShowDialog(this) != DialogResult.OK) return;
-                if (!Ops.Compress(this, files, f.Options)) return;
+                if (!Ops.Compress(this, f.Files, f.Options)) return;
                 var made = File.Exists(f.Options.Output) ? f.Options.Output : f.Options.Output + ".001";
                 if (File.Exists(made)) OpenArchive(made);
             }
@@ -352,18 +451,15 @@ namespace Zipper
                 if (d.ShowDialog(this) == DialogResult.OK) AddFiles(d.FileNames);
         }
 
+        /// <summary>Adds the selected files using the same entry names as a new archive.</summary>
         void AddFiles(string[] files)
         {
-            var list = SevenZip.ListFile(files);
-            try
-            {
-                var args = new List<string> { "a" };
-                if (password != null) args.Add("-p");
-                args.Add(archive); args.Add("@" + list);
-                var r = ProgressForm.Run(this, "추가하는 중", args, password ?? "");
-                if (!r.Ok && !r.Cancelled) Ui.Error(this, "파일을 추가하지 못했습니다.\n\n" + r.Errors);
-            }
-            finally { File.Delete(list); }
+            List<string> args = new List<string> { "a" };
+            if (password != null) args.Add("-p");
+            HashSet<string> existing = new HashSet<string>(Flatten(root).Select(n => n.FullPath.Replace('/', '\\')), StringComparer.OrdinalIgnoreCase);
+            SevenZip.Result r = ProgressForm.Run(this, "추가하는 중", (progress, cancelled) =>
+                SevenZip.Add(args, archive, files, password ?? "", progress, cancelled, existing, renameExe: Shell.RenameExe));
+            if (!r.Ok && !r.Cancelled) Ui.Error(this, "파일을 추가하지 못했습니다.\n\n" + r.Errors);
             Reload();
         }
 
@@ -419,7 +515,7 @@ namespace Zipper
             if (sel.Count == 0) return;
             var dir = Path.Combine(tempRoot, Guid.NewGuid().ToString("N").Substring(0, 8));
             if (!Ops.Extract(this, archive, dir, sel.Select(n => n.FullPath).ToList(), password, false, "-aoa")) return;
-            var paths = sel.Select(n => Path.Combine(dir, n.FullPath)).Where(p => File.Exists(p) || Directory.Exists(p)).ToArray();
+            var paths = sel.Select(n => Ops.OnDisk(Path.Combine(dir, n.FullPath))).Where(p => File.Exists(p) || Directory.Exists(p)).ToArray();
             draggingOut = true;
             try { list.DoDragDrop(new DataObject(DataFormats.FileDrop, paths), DragDropEffects.Copy); }
             finally { draggingOut = false; }
