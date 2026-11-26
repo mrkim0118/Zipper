@@ -36,6 +36,7 @@ Zipper는 zip, 7z, rar, tar, gz, iso 등 20가지가 넘는 형식과 분할 압
 - **진행 표시**: 속도와 남은 시간, 여러 압축 파일을 이어서 처리할 때 "2/3" 표시. 한 압축 파일의 암호를 다음 파일에 먼저 시도합니다.
 - **안전한 기본값**: 같은 이름의 파일이 있으면 새 파일 이름을 바꿔 기존 파일을 지킵니다(덮어쓰기·건너뛰기로 바꿀 수 있음). 인터넷에서 받은 압축 파일을 풀면 풀린 파일에도 "인터넷에서 받은 파일" 표시가 남아 SmartScreen과 Office 보호된 보기가 그대로 동작합니다.
 - **Mac 한글 이름**: Mac에서 만든 압축 파일의 자모가 분리된 한글 이름을 풀 때 정상 한글로 바꿉니다.
+- **업데이트 확인**: 실행할 때 GitHub 최신 릴리스를 확인하고, 새 버전이 있으면 내려받아 설치할지 묻습니다.
 
 ## 요구 사항
 
@@ -142,6 +143,7 @@ powershell -STA -ExecutionPolicy Bypass -File tests/gui-test.ps1
 | `tests` | CLI·GUI 종단 테스트 |
 | `tests/data` | EggDotNet 테스트 모음의 ALZ·EGG 샘플 |
 | `build.ps1` | 프로그램과 설치 파일 빌드 |
+| `src/Zipper/GitHubUpdater.cs` | GitHub 릴리스 업데이트 확인 |
 
 ## 사용한 라이브러리
 

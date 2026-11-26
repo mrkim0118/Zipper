@@ -36,6 +36,7 @@ Get `ZipperSetup-<version>.exe` from the [Releases](https://github.com/mrkim0118
 - **Progress**: speed, time left, and "2/3" when several archives are processed in a row; the password of one archive is tried first on the next.
 - **Safe defaults**: existing files are kept by renaming the new one, unless you choose overwrite or skip. Files extracted from a downloaded archive keep the "from the internet" mark, so SmartScreen and Office Protected View still apply.
 - **Korean names from macOS**: decomposed Hangul names in archives made on a Mac are restored to normal Hangul on extraction.
+- **Update check**: On launch, checks the latest GitHub release and asks whether to download and install the new version.
 
 ## Requirements
 
@@ -142,6 +143,7 @@ Raise `Version` in `src/Zipper/Zipper.csproj` and `AppVersion` in `Installer/Zip
 | `tests` | CLI and GUI end-to-end tests |
 | `tests/data` | ALZ / EGG samples from the EggDotNet test suite |
 | `build.ps1` | Builds the app and the installer |
+| `src/Zipper/GitHubUpdater.cs` | GitHub release update check |
 
 ## Libraries
 

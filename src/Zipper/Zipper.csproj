@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <PackageReference Include="EggDotNet" Version="0.0.9" />
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
 </Project>
