@@ -38,6 +38,48 @@ namespace Zipper
         /// Toolbar icon in the app icon's style: a navy box with a silver zipper and a round badge.
         /// extract: zipper opened below the slider + green "out" arrow; otherwise closed zipper + blue plus.
         /// </summary>
+        /// <summary>Writes the bitmaps (each under 256 px) as one .ico file with 32-bit BMP images, readable everywhere.</summary>
+        public static void WriteIco(Stream output, Bitmap[] images)
+        {
+            var data = images.Select(Dib).ToArray();
+            var w = new BinaryWriter(output);
+            w.Write((short)0); w.Write((short)1); w.Write((short)images.Length); // ICONDIR: reserved, type 1 = icon, count
+            int offset = 6 + 16 * images.Length;
+            for (int i = 0; i < images.Length; i++)
+            {
+                w.Write((byte)(images[i].Width >= 256 ? 0 : images[i].Width));
+                w.Write((byte)(images[i].Height >= 256 ? 0 : images[i].Height));
+                w.Write((byte)0); w.Write((byte)0);           // no palette, reserved
+                w.Write((short)1); w.Write((short)32);         // planes, bits per pixel
+                w.Write(data[i].Length); w.Write(offset);
+                offset += data[i].Length;
+            }
+            foreach (var d in data) w.Write(d);
+            w.Flush();
+        }
+
+        /// <summary>Icon image data: BITMAPINFOHEADER, bottom-up BGRA pixels, then an all-zero AND mask (alpha decides).</summary>
+        static byte[] Dib(Bitmap b)
+        {
+            int wd = b.Width, ht = b.Height, maskRow = ((wd + 31) / 32) * 4;
+            using (var m = new MemoryStream())
+            using (var w = new BinaryWriter(m))
+            {
+                w.Write(40); w.Write(wd); w.Write(ht * 2);   // header size, width, height (color + mask)
+                w.Write((short)1); w.Write((short)32); w.Write(0); // planes, bpp, BI_RGB
+                w.Write(wd * ht * 4); w.Write(0); w.Write(0); w.Write(0); w.Write(0);
+                for (int y = ht - 1; y >= 0; y--)
+                    for (int x = 0; x < wd; x++)
+                    {
+                        var c = b.GetPixel(x, y);
+                        w.Write(c.B); w.Write(c.G); w.Write(c.R); w.Write(c.A);
+                    }
+                w.Write(new byte[maskRow * ht]);
+                w.Flush();
+                return m.ToArray();
+            }
+        }
+
         public static Bitmap ArchiveIcon(int size, bool extract)
         {
             var bmp = new Bitmap(size, size);

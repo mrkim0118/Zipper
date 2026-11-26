@@ -17,9 +17,16 @@ namespace Zipper
         volatile int percent; volatile string current = "";
         volatile bool cancel;
         SevenZip.Result result;
+        readonly long total;
 
-        ProgressForm(string title, IList<string> args, string password, string workDir)
+        /// <summary>"2/3" while a selection of several archives is processed; shown in every progress window's title.</summary>
+        public static string Batch;
+
+        /// <summary>Displays progress and cancellation for the supplied archive operation.</summary>
+        ProgressForm(string title, Func<Action<int, string>, Func<bool>, SevenZip.Result> operation, long total)
         {
+            this.total = total;
+            if (Batch != null) title += $"  ({Batch})";
             Ui.Dialog(this, title);
             ControlBox = true;
             var grid = Ui.Grid(1);
@@ -34,24 +41,44 @@ namespace Zipper
             {
                 bar.Value = Math.Min(100, percent);
                 file.Text = current;
-                var t = watch.Elapsed;
-                info.Text = $"{percent}%   ·   경과 시간 {t:hh\\:mm\\:ss}";
+                info.Text = Info(percent, watch.Elapsed);
             };
             Shown += (s, e) =>
             {
                 timer.Start();
                 new Thread(() =>
                 {
-                    var r = SevenZip.Run(args, password, (p, f) => { percent = p; if (f.Length > 0) current = f; }, () => cancel, workDir);
+                    SevenZip.Result r;
+                    try { r = operation((p, f) => { percent = p; if (f.Length > 0) current = f; }, () => cancel); }
+                    catch (Exception ex) { r = new SevenZip.Result { ExitCode = SevenZip.Result.FatalError, Output = "ERROR: " + ex.Message }; }
                     BeginInvoke((Action)(() => { result = r; timer.Stop(); Close(); }));
                 }) { IsBackground = true }.Start();
             };
             FormClosing += (s, e) => { if (result == null) { e.Cancel = true; cancel = true; } }; // X = cancel
         }
 
-        public static SevenZip.Result Run(IWin32Window owner, string title, IList<string> args, string password = null, string workDir = null)
+        /// <summary>"42% · 12.3 MB/s · 남은 시간 00:01:10 · 경과 시간 00:00:51". Speed needs the total size.</summary>
+        string Info(int p, TimeSpan t)
         {
-            using (var f = new ProgressForm(title, args, password, workDir))
+            var parts = new List<string> { $"{p}%" };
+            double secs = t.TotalSeconds;
+            if (total > 0 && secs >= 1 && p > 0) parts.Add(Ui.Size((long)(total * (p / 100.0) / secs)) + "/s");
+            if (secs >= 2 && p >= 1 && p < 100)
+                parts.Add("남은 시간 " + TimeSpan.FromSeconds(Math.Round(secs * (100 - p) / p)).ToString(@"hh\:mm\:ss"));
+            parts.Add("경과 시간 " + t.ToString(@"hh\:mm\:ss"));
+            return string.Join("   ·   ", parts);
+        }
+
+        /// <summary>Runs a 7-Zip command with the progress dialog. total = bytes processed in all (for the speed).</summary>
+        public static SevenZip.Result Run(IWin32Window owner, string title, IList<string> args, string password = null, long total = 0)
+        {
+            return Run(owner, title, (progress, cancelled) => SevenZip.Run(args, password, progress, cancelled), total);
+        }
+
+        /// <summary>Runs archive preparation and compression on the same cancellable worker.</summary>
+        public static SevenZip.Result Run(IWin32Window owner, string title, Func<Action<int, string>, Func<bool>, SevenZip.Result> operation, long total = 0)
+        {
+            using (ProgressForm f = new ProgressForm(title, operation, total))
             {
                 Ui.Show(f, owner);
                 return f.result;
