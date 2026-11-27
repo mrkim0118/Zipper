@@ -35,7 +35,7 @@ namespace Zipper
         readonly CheckBox encNames = new CheckBox { Text = "파일 이름도 암호화 (7z)", AutoSize = true, Checked = true };
         readonly CheckBox aes = new CheckBox { Text = "AES-256 암호화 (zip, 일부 구형 프로그램은 못 엶)", AutoSize = true };
         readonly CheckBox each = new CheckBox { Text = "항목마다 따로 압축 (각 항목 옆에 그 이름으로 저장)", AutoSize = true };
-        readonly CheckBox renameExe = new CheckBox { Text = "실행 파일(.exe)을 .ex로 바꿔서 압축 (메일 첨부 차단 방지)", AutoSize = true, Checked = Shell.RenameExe };
+        readonly CheckBox renameExe = new CheckBox { Text = "실행 파일(.exe)을 .zipper로 바꿔서 압축 (메일 첨부 차단 방지, 복원용 배치파일 포함)", AutoSize = true, Checked = Shell.RenameExe };
 
         public CompressForm(string[] files, string fmt)
         {
@@ -302,7 +302,7 @@ namespace Zipper
             overwrite.Items.AddRange(ExtractForm.OverwriteNames);
             overwrite.SelectedIndex = Shell.OverwriteMode;
             var open = new CheckBox { Text = "압축을 푼 뒤 폴더 열기", AutoSize = true, Checked = Shell.OpenFolderAfterExtract };
-            var exe = new CheckBox { Text = "압축할 때 실행 파일(.exe)을 .ex로 바꾸기 (메일 첨부 차단 방지)", AutoSize = true, Checked = Shell.RenameExe };
+            var exe = new CheckBox { Text = "압축할 때 실행 파일(.exe)을 .zipper로 바꾸기 (메일 첨부 차단 방지, 풀 때 자동 복원)", AutoSize = true, Checked = Shell.RenameExe };
             var classic = new CheckBox
             {
                 Text = "Windows 11: 오른쪽 클릭하면 전체 메뉴 바로 표시 ('더 많은 옵션 표시' 없이)", AutoSize = true,

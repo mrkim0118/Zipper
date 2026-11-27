@@ -27,7 +27,7 @@ Get `ZipperSetup-<version>.exe` from the [Releases](https://github.com/mrkim0118
 - **Passwords**: ZipCrypto or AES-256 for zip, AES-256 with encrypted file names for 7z. A wrong password is caught before extraction, so no empty files are left behind.
 - **Smart extract**: one top-level item goes next to the archive; several items go into a new folder named after the archive.
 - **Explorer menu**: plain files and folders get compress…, one-click ZIP / 7Z; archives also get smart extract, extract here, extract each to a new folder, extract to…, open and test. Selecting many files makes one archive; selecting many archives extracts each one. The menu is added on first launch, even without the installer.
-- **EXE renaming (optional)**: store `.exe` files as `.ex` so mail services accept the archive. On by default; turn it off in the compress dialog or Settings.
+- **EXE renaming (optional)**: store `.exe` files as `.zipper` so mail services accept the archive, with an `EXE 복원하기.bat` at the archive root that renames them back for people without Zipper. Zipper itself turns `.zipper` back into `.exe` when extracting (and drops the batch file). On by default; turn it off in the compress dialog or Settings.
 - **Default program**: associate 29 archive types with Zipper from Settings or the installer.
 - **Drag and drop**: drop an archive to open it, drop files to compress them or add them to the open archive, drag files out of an archive into Explorer.
 - **Edit and test**: add, delete and rename (F2) files in zip, 7z, tar and wim archives; test an archive for damage.

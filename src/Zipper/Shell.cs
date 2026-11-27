@@ -29,7 +29,7 @@ namespace Zipper
         /// <summary>0 = overwrite, 1 = skip, 2 = rename new file (default: never loses data).</summary>
         public static int OverwriteMode { get => (int)Get("OverwriteMode", 2); set => Set("OverwriteMode", value); }
         public static bool OpenFolderAfterExtract { get => (int)Get("OpenFolder", 1) != 0; set => Set("OpenFolder", value ? 1 : 0); }
-        /// <summary>Stores .exe files as .ex inside new archives (mail services often block .exe attachments).</summary>
+        /// <summary>Stores .exe files as .zipper inside new archives (mail services often block .exe attachments).</summary>
         public static bool RenameExe { get => (int)Get("RenameExe", 1) != 0; set => Set("RenameExe", value ? 1 : 0); }
         /// <summary>Recently opened archives, newest first (at most 10; missing files are dropped when read).</summary>
         public static string[] Recent

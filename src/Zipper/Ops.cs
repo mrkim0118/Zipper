@@ -133,8 +133,9 @@ namespace Zipper
         }
 
         /// <summary>
-        /// macOS stores Korean names decomposed (NFD: ㅎ+ㅏ+ㄴ), which Windows shows as separate jamo. After extracting,
-        /// such files and folders are renamed to the composed form (NFC), unless that name is already taken.
+        /// After extracting: macOS stores Korean names decomposed (NFD: ㅎ+ㅏ+ㄴ), which Windows shows as separate jamo,
+        /// so such names are composed (NFC) unless that name is taken. Files stored as .zipper get their .exe back
+        /// ("app (2).exe" if app.exe exists), and the restore batch file Zipper added is then no longer needed.
         /// </summary>
         static void NormalizeNames(string archive, string password, string dest, bool flat)
         {
@@ -149,25 +150,45 @@ namespace Zipper
                     else for (int i = 1; i <= parts.Length; i++) names.Add(string.Join("\\", parts, 0, i));
                 }
                 // deepest first, so a folder is renamed after everything inside it
-                foreach (var rel in names.Where(n => !n.IsNormalized()).OrderByDescending(n => n.Count(c => c == '\\')))
+                bool restored = false;
+                foreach (var rel in names.Where(n => !n.IsNormalized() || IsStandIn(n)).OrderByDescending(n => n.Count(c => c == '\\')))
                 {
                     var from = Path.Combine(dest, rel);
                     var to = Path.Combine(Path.GetDirectoryName(from), Path.GetFileName(from).Normalize());
-                    if (File.Exists(to) || Directory.Exists(to)) continue;
+                    if (File.Exists(from) && IsStandIn(to))
+                    {
+                        var stem = to.Substring(0, to.Length - SevenZip.ExeStandIn.Length);
+                        to = stem + ".exe";
+                        for (int i = 2; File.Exists(to) || Directory.Exists(to); i++) to = $"{stem} ({i}).exe";
+                        restored = true;
+                    }
+                    if (to == from || File.Exists(to) || Directory.Exists(to)) continue;
                     if (Directory.Exists(from)) Directory.Move(from, to);
                     else if (File.Exists(from)) File.Move(from, to);
                 }
+                if (restored)
+                    foreach (var rel in names.Where(n => Path.GetFileName(n) == SevenZip.RestoreBatName))
+                    {
+                        var bat = Path.Combine(dest, rel);
+                        if (File.Exists(bat) && File.ReadAllText(bat) == SevenZip.RestoreBat) File.Delete(bat); // only our own, unchanged
+                    }
             }
             catch { } // best effort: the files are extracted either way
         }
 
-        /// <summary>Where an extracted entry ended up: its own name, or the NFC form NormalizeNames gave it.</summary>
+        static bool IsStandIn(string name) => name.EndsWith(SevenZip.ExeStandIn, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Where an extracted entry ended up: its own name, or the NFC / .exe name NormalizeNames gave it.</summary>
         public static string OnDisk(string path)
         {
-            if (File.Exists(path) || Directory.Exists(path)) return path;
-            var parts = path.Split('\\');
-            var nfc = string.Join("\\", parts.Select(p => p.Normalize()));
-            return File.Exists(nfc) || Directory.Exists(nfc) ? nfc : path;
+            var nfc = string.Join("\\", path.Split('\\').Select(p => p.Normalize()));
+            foreach (var p in new[] { path, nfc })
+            {
+                if (File.Exists(p) || Directory.Exists(p)) return p;
+                if (IsStandIn(p) && File.Exists(p.Substring(0, p.Length - SevenZip.ExeStandIn.Length) + ".exe"))
+                    return p.Substring(0, p.Length - SevenZip.ExeStandIn.Length) + ".exe";
+            }
+            return path;
         }
 
         /// <summary>Default archive name next to the inputs: one item -> its name, several -> the parent folder's name.</summary>

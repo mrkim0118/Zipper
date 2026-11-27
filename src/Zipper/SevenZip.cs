@@ -114,7 +114,22 @@ namespace Zipper
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         static extern bool CreateHardLink(string newFile, string existingFile, IntPtr securityAttributes);
 
-        /// <summary>Creates or updates an archive. With renameExe, file entries ending in .exe are stored as .ex.</summary>
+        /// <summary>Extension .exe files are stored under (mail services often block .exe attachments).</summary>
+        public const string ExeStandIn = ".zipper";
+        public const string RestoreBatName = "EXE 복원하기.bat";
+        /// <summary>Put next to renamed files so people without Zipper can turn *.zipper back into *.exe.</summary>
+        public const string RestoreBat =
+            "@echo off\r\n" +
+            "rem Made by Zipper: .exe files were stored as .zipper so mail services accept the archive.\r\n" +
+            "rem Run this in the extracted folder to rename every .zipper file (subfolders too) back to .exe.\r\n" +
+            "for /r \"%~dp0.\" %%f in (*.zipper) do ren \"%%f\" \"%%~nf.exe\"\r\n" +
+            "echo .zipper files were renamed back to .exe.\r\n" +
+            "pause\r\n";
+
+        /// <summary>
+        /// Creates or updates an archive. With renameExe, file entries ending in .exe are stored as .zipper
+        /// and the archive gets RestoreBat at its root.
+        /// </summary>
         public static Result Add(IList<string> options, string output, string[] files, string password,
                                  Action<int, string> progress, Func<bool> cancelled, ISet<string> existing = null,
                                  bool replaceExisting = false, bool renameExe = false)
@@ -128,6 +143,7 @@ namespace Zipper
                 HashSet<string> rootNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 output = Path.GetFullPath(output);
                 List<string> sources = new List<string>();
+                bool anyRenamed = false;
                 foreach (string file in files)
                 {
                     string path = Path.GetFullPath(file);
@@ -155,15 +171,16 @@ namespace Zipper
                         DirectoryInfo directory = item as DirectoryInfo;
                         if (renameExe && directory == null && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                         {
-                            // app.exe -> app.ex (keeps the original case). If app.ex is already taken, by a file next
-                            // to it or by an entry of the archive being updated, use "app (2).ex" and so on.
-                            string ex = name.Substring(name.Length - 4, 3), stem = name.Substring(0, name.Length - 4);
+                            // app.exe -> app.zipper. If app.zipper is already taken, by a file next to it
+                            // or by an entry of the archive being updated, use "app (2).zipper" and so on.
+                            string ex = ExeStandIn, stem = name.Substring(0, name.Length - 4);
                             string dir = Path.GetDirectoryName(item.FullName);
                             bool Taken(string n) => File.Exists(Path.Combine(dir, n)) || Directory.Exists(Path.Combine(dir, n))
-                                                    || (existing != null && existing.Contains(Path.Combine(parent, n)));
+                                                    || (existing != null && existing.Contains(Path.Combine(parent, n)))
+                                                    || entries.Any(e => e.Name.Equals(Path.Combine(parent, n), StringComparison.OrdinalIgnoreCase));
                             name = stem + ex;
                             for (int i = 2; Taken(name); i++) name = $"{stem} ({i}){ex}";
-                            renamed = true;
+                            renamed = anyRenamed = true;
                         }
                         string path = Path.Combine(parent, name);
                         entries.Add((item, path));
@@ -209,6 +226,18 @@ namespace Zipper
                         if (entries[i].Source is DirectoryInfo)
                             Directory.SetLastWriteTimeUtc(Path.Combine(stage, entries[i].Name), entries[i].Source.LastWriteTimeUtc);
                     inputs.Add(Path.Combine(stage, rootName));
+                }
+                // One folder archived: the batch file goes inside it, so the folder stays the only top-level item.
+                string inside = anyRenamed && sources.Count == 1 && Directory.Exists(sources[0]) ? Path.GetFileName(inputs[0]) : "";
+                if (anyRenamed && !(existing?.Contains(Path.Combine(inside, RestoreBatName)) ?? false))
+                {
+                    string bat = RestoreBatName;
+                    bool Taken(string n) => File.Exists(Path.Combine(stage, inside, n)) || Directory.Exists(Path.Combine(stage, inside, n))
+                                            || (inside.Length == 0 && rootNames.Contains(n));
+                    for (int i = 2; Taken(bat); i++) bat = Path.GetFileNameWithoutExtension(RestoreBatName) + $" ({i}).bat";
+                    Directory.CreateDirectory(Path.Combine(stage, inside));
+                    File.WriteAllText(Path.Combine(stage, inside, bat), RestoreBat, Encoding.ASCII);
+                    if (inside.Length == 0) inputs.Add(Path.Combine(stage, bat));
                 }
                 if (cancelled()) throw new OperationCanceledException();
                 list = ListFile(inputs);
