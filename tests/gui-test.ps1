@@ -107,6 +107,22 @@ try {
     $p.WaitForExit(20000) | Out-Null
     $txt = Get-ChildItem "$work\lorem_long_aes256" -Recurse -File -ErrorAction SilentlyContinue
     Check 'egg: AES-256 extracts with password' ($txt.Count -ge 1 -and ($txt | Where-Object Name -eq 'lorem_ipsum_long.txt').Length -gt 15000)
+
+    # 5. Explorer selection: Zipper reads it instead of waiting for the other processes
+    $sel = New-Item -ItemType Directory "$work\sel"; 'a' | Set-Content "$sel\s1.txt"; 'b' | Set-Content "$sel\s2.txt"
+    $shell = New-Object -ComObject Shell.Application
+    $shell.Open($sel.FullName); Start-Sleep 3
+    $ew = @($shell.Windows()) | Where-Object { try { $_.Document.Folder.Self.Path -eq $sel.FullName } catch { $false } } | Select-Object -First 1
+    try {
+        $ew.Document.SelectItem($ew.Document.Folder.ParseName('s1.txt'), 1 + 4 + 8 + 16)
+        $ew.Document.SelectItem($ew.Document.Folder.ParseName('s2.txt'), 1); Start-Sleep 1
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $ps = 's1.txt', 's2.txt' | ForEach-Object { Start-Process $exe -ArgumentList '/czip', "`"$sel\$_`"" -PassThru }
+        $ps | ForEach-Object { $_.WaitForExit(20000) | Out-Null }
+        '      two selected files compressed in {0:N2}s' -f $sw.Elapsed.TotalSeconds
+        Check 'explorer selection: two processes make one archive' ((Test-Path "$sel\sel.zip") -and -not (Test-Path "$sel\s1.zip") -and -not (Test-Path "$sel\s2.zip"))
+    }
+    finally { $ew.Quit() }
 }
 finally {
     Get-Process Zipper -ErrorAction SilentlyContinue | Stop-Process -Force

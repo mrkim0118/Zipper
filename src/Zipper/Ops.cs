@@ -90,7 +90,7 @@ namespace Zipper
             if (!Open(null, archive, ref password, out var entries, out _)) return;
             var dest = target == Target.Here ? Path.GetDirectoryName(archive)
                      : target == Target.Folder ? FolderFor(archive) : SmartTarget(archive, entries);
-            Extract(null, archive, dest, null, password, Shell.OpenFolderAfterExtract, total: entries.Sum(e => e.Size));
+            Extract(null, archive, dest, null, password, Shell.OpenFolderAfterExtract, total: entries.Sum(e => e.Size), entries: entries);
         }
 
         /// <summary>Explorer command: tests an archive for damage and reports the result.</summary>
@@ -103,9 +103,13 @@ namespace Zipper
             else Ui.Error(null, $"{Path.GetFileName(archive)}\n\n손상된 파일이 있습니다.\n\n" + r.Errors);
         }
 
-        /// <summary>Extracts (all, or the given entry paths) into dest. Password must already be checked with Open.</summary>
+        /// <summary>
+        /// Extracts (all, or the given entry paths) into dest. Password must already be checked with Open.
+        /// entries: the listing Open already made, so it is not read a second time for the name fixes.
+        /// </summary>
         public static bool Extract(IWin32Window owner, string archive, string dest, IList<string> items, string password,
-                                   bool openFolder, string overwrite = null, bool flat = false, long total = 0)
+                                   bool openFolder, string overwrite = null, bool flat = false, long total = 0,
+                                   List<SevenZip.Entry> entries = null)
         {
             // -snz: files from a downloaded archive keep the "came from the internet" mark (SmartScreen, Office Protected View).
             var args = new List<string> { flat ? "e" : "x", archive, "-o" + dest, "-y", "-snz", overwrite ?? Shell.OverwriteSwitch };
@@ -125,7 +129,7 @@ namespace Zipper
                     Ui.Error(owner, "압축을 푸는 중 오류가 발생했습니다.\n\n" + r.Errors);
                     return false;
                 }
-                NormalizeNames(archive, password, dest, flat);
+                NormalizeNames(entries ?? SevenZip.List(archive, password, out _, out _), dest, flat);
                 if (openFolder) Process.Start("explorer.exe", "\"" + dest + "\"");
                 return true;
             }
@@ -137,12 +141,12 @@ namespace Zipper
         /// so such names are composed (NFC) unless that name is taken. Files stored as .zipper get their .exe back
         /// ("app (2).exe" if app.exe exists), and the restore batch file Zipper added is then no longer needed.
         /// </summary>
-        static void NormalizeNames(string archive, string password, string dest, bool flat)
+        static void NormalizeNames(List<SevenZip.Entry> entries, string dest, bool flat)
         {
             try
             {
                 var names = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var e in SevenZip.List(archive, password, out _, out _))
+                foreach (var e in entries)
                 {
                     var parts = e.Path.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
                     if (parts.Length == 0) continue;

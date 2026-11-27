@@ -55,7 +55,7 @@ namespace Zipper
                             if (!Ops.Open(null, a, ref pw, out var entries, out _)) return;
                             using (var f = new ExtractForm(a, 0))
                                 if (Ui.Show(f, null) == DialogResult.OK)
-                                    Ops.Extract(null, a, f.Dest, null, pw, f.OpenFolder, f.OverwriteSwitch, total: entries.Sum(e => e.Size));
+                                    Ops.Extract(null, a, f.Dest, null, pw, f.OpenFolder, f.OverwriteSwitch, total: entries.Sum(e => e.Size), entries: entries);
                         });
                         return;
                     }
@@ -138,7 +138,11 @@ namespace Zipper
                 }
 
                 var all = new List<string>(files);
-                while (true)
+                // Ask Explorer what is selected: once every selected item has arrived there is nothing to wait for
+                // (one item: no wait at all). Without an answer, wait until no process has called for 800 ms.
+                var expected = ExplorerSelection(files);
+                bool Complete() => expected != null && expected.IsSubsetOf(all.Select(f => f.TrimEnd('\\')));
+                while (!Complete())
                 {
                     using (var s = new NamedPipeServerStream(name, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
                     {
@@ -153,6 +157,35 @@ namespace Zipper
                 mutex.ReleaseMutex();
                 return all.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             }
+        }
+
+        /// <summary>
+        /// The items selected in the Explorer window showing these files' folder, if that selection includes them.
+        /// null when no such window is found (desktop, file dialogs, command line): the caller then falls back to waiting.
+        /// </summary>
+        static HashSet<string> ExplorerSelection(string[] files)
+        {
+            try
+            {
+                var mine = files.Select(f => f.TrimEnd('\\')).ToList();
+                var dir = Path.GetDirectoryName(mine[0]);
+                if (dir == null) return null;
+                dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application"));
+                foreach (dynamic window in shell.Windows())
+                {
+                    try
+                    {
+                        string folder = window.Document.Folder.Self.Path;
+                        if (!string.Equals(folder.TrimEnd('\\'), dir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) continue;
+                        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (dynamic item in window.Document.SelectedItems()) selected.Add(((string)item.Path).TrimEnd('\\'));
+                        if (mine.All(selected.Contains)) return selected;
+                    }
+                    catch { } // not a folder view (e.g. Control Panel): try the next window
+                }
+            }
+            catch { }
+            return null;
         }
     }
 }
