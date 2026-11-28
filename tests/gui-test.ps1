@@ -108,6 +108,17 @@ try {
     $txt = Get-ChildItem "$work\lorem_long_aes256" -Recurse -File -ErrorAction SilentlyContinue
     Check 'egg: AES-256 extracts with password' ($txt.Count -ge 1 -and ($txt | Where-Object Name -eq 'lorem_ipsum_long.txt').Length -gt 15000)
 
+    # 4b. encrypted ZIP with many files: the parallel extraction gets the password in every 7z.exe
+    $ez = New-Item -ItemType Directory "$work\ezip\src"; 1..30 | ForEach-Object { Set-Content "$ez\e$_.txt" "secret $_" }
+    [IO.File]::WriteAllText("$work\ezip\pw.txt", "zip-pass`r`nzip-pass`r`n")
+    Start-Process $7z -ArgumentList 'a', '-tzip', '-p', "`"$work\ezip\e.zip`"", "`"$ez\*`"", '-bso0', '-bsp0' -RedirectStandardInput "$work\ezip\pw.txt" -NoNewWindow -Wait
+    $p = Start-Process $exe -ArgumentList '/xfolder', "`"$work\ezip\e.zip`"" -PassThru
+    $w = Wait-Window '암호 입력'; Front $w
+    Paste-Text 'zip-pass'; Keys '{ENTER}'
+    $p.WaitForExit(30000) | Out-Null
+    $out = Get-ChildItem "$work\ezip\e" -File -ErrorAction SilentlyContinue
+    Check 'encrypted zip: all files extracted in parallel' ($out.Count -eq 30 -and (Get-Content "$work\ezip\e\e7.txt") -eq 'secret 7')
+
     # 5. Explorer selection: Zipper reads it instead of waiting for the other processes
     $sel = New-Item -ItemType Directory "$work\sel"; 'a' | Set-Content "$sel\s1.txt"; 'b' | Set-Content "$sel\s2.txt"
     $shell = New-Object -ComObject Shell.Application

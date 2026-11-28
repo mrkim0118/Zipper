@@ -144,6 +144,12 @@ namespace Zipper
                 output = Path.GetFullPath(output);
                 List<string> sources = new List<string>();
                 bool anyRenamed = false;
+                // New zip/7z/tar archives: add the files as they are, then rename the .exe entries inside the archive
+                // with "7z rn" (a fast copy) instead of linking every file of the folder into a staging tree first.
+                // Staging is still used for volumes (rn cannot update them) and for adding to an existing archive.
+                bool viaRename = renameExe && existing == null && !options.Any(o => o.StartsWith("-v"))
+                                 && options.Any(o => o == "-tzip" || o == "-t7z" || o == "-ttar");
+                List<string> pairs = new List<string>(); // old path, new path, ... for "7z rn"
                 foreach (string file in files)
                 {
                     string path = Path.GetFullPath(file);
@@ -155,6 +161,7 @@ namespace Zipper
                 foreach (string source in sources)
                 {
                     List<(FileSystemInfo Source, string Name)> entries = new List<(FileSystemInfo, string)>();
+                    List<string> sourcePairs = new List<string>();
                     bool renamed = false;
 
                     // Collect first so a temporary directory inside a selected folder cannot be archived.
@@ -181,6 +188,8 @@ namespace Zipper
                             name = stem + ex;
                             for (int i = 2; Taken(name); i++) name = $"{stem} ({i}){ex}";
                             renamed = anyRenamed = true;
+                            sourcePairs.Add(Path.Combine(parent, item.Name)); // folders keep their names, so parent is unchanged
+                            sourcePairs.Add(Path.Combine(parent, name));
                         }
                         string path = Path.Combine(parent, name);
                         entries.Add((item, path));
@@ -193,9 +202,10 @@ namespace Zipper
                     string rootName = entries[0].Name;
                     if (!rootNames.Add(rootName)) throw new IOException("압축할 이름이 겹칩니다: " + rootName);
                     bool containsStage = stage.StartsWith(source + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-                    if (!renamed && !containsStage)
+                    if ((!renamed || viaRename) && !containsStage)
                     {
                         inputs.Add(source);
+                        pairs.AddRange(sourcePairs);
                         continue;
                     }
 
@@ -232,12 +242,21 @@ namespace Zipper
                 if (anyRenamed && !(existing?.Contains(Path.Combine(inside, RestoreBatName)) ?? false))
                 {
                     string bat = RestoreBatName;
-                    bool Taken(string n) => File.Exists(Path.Combine(stage, inside, n)) || Directory.Exists(Path.Combine(stage, inside, n))
+                    // the folder whose files the batch file must not collide with: staged copy, or the source itself
+                    bool staged = inside.Length > 0 && Directory.Exists(Path.Combine(stage, inside));
+                    string folder = inside.Length == 0 ? stage : staged ? Path.Combine(stage, inside) : sources[0];
+                    bool Taken(string n) => File.Exists(Path.Combine(folder, n)) || Directory.Exists(Path.Combine(folder, n))
                                             || (inside.Length == 0 && rootNames.Contains(n));
                     for (int i = 2; Taken(bat); i++) bat = Path.GetFileNameWithoutExtension(RestoreBatName) + $" ({i}).bat";
-                    Directory.CreateDirectory(Path.Combine(stage, inside));
-                    File.WriteAllText(Path.Combine(stage, inside, bat), RestoreBat, Encoding.ASCII);
-                    if (inside.Length == 0) inputs.Add(Path.Combine(stage, bat));
+                    if (staged)
+                        File.WriteAllText(Path.Combine(stage, inside, bat), RestoreBat, Encoding.ASCII);
+                    else
+                    {
+                        Directory.CreateDirectory(stage);
+                        File.WriteAllText(Path.Combine(stage, bat), RestoreBat, Encoding.ASCII);
+                        inputs.Add(Path.Combine(stage, bat));
+                        if (inside.Length > 0) { pairs.Add(bat); pairs.Add(Path.Combine(inside, bat)); } // moved into the folder by rn
+                    }
                 }
                 if (cancelled()) throw new OperationCanceledException();
                 list = ListFile(inputs);
@@ -245,6 +264,16 @@ namespace Zipper
                 bool existed = File.Exists(output);
                 if (replaceExisting) File.Delete(output);
                 Result result = Run(args, password, progress, cancelled);
+                if (result.Ok && pairs.Count > 0)
+                {
+                    string pairList = ListFile(pairs);
+                    try
+                    {
+                        Result rn = Run(new List<string> { "rn", output, "@" + pairList }, password, null, cancelled);
+                        if (!rn.Ok) result = rn;
+                    }
+                    finally { File.Delete(pairList); }
+                }
                 if (!result.Ok && !existed) DeletePartial(output);
                 return result;
             }

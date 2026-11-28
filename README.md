@@ -22,7 +22,7 @@ Get `ZipperSetup-<version>.exe` from the [Releases](https://github.com/mrkim0118
 
 - **Browse archives like folders**: open any archive, walk its folders, sort by name, size, type or date, and double-click a file to open it.
 - **Extract many formats**: zip, 7z, rar/rar5, tar, gz/tgz, bz2, xz, zst, lzma, cab, iso, wim, arj, lzh, cpio, rpm, deb, xar, z and more, plus the Korean ALZ and EGG formats (including encrypted and split ones).
-- **Create archives**: zip, 7z, tar, tar.gz, tar.bz2, tar.xz, gz, bz2, xz and wim, with 6 compression levels — every format the 7-Zip engine can write (rar, alz, egg, iso and the others can only be extracted). The compress window lists the chosen files and folders; add more, drop them in, or remove some before compressing.
+- **Create archives**: zip, 7z, tar, tar.gz, tar.bz2, tar.xz, gz, bz2, xz and wim, with 6 compression levels (ZIP "Normal" uses the fast Deflate setting, so it matches the size of other archivers' defaults while running several times faster; pick "High" or "Max" for smaller files) — every format the 7-Zip engine can write (rar, alz, egg, iso and the others can only be extracted). The compress window lists the chosen files and folders; add more, drop them in, or remove some before compressing.
 - **Split archives**: create volumes of any size (10 MB, 700 MB CD, 4092 MB FAT32, or a custom size such as `50 MB`), and open `.001`, `.z01` and `.part1.rar` sets directly.
 - **Passwords**: ZipCrypto or AES-256 for zip, AES-256 with encrypted file names for 7z. A wrong password is caught before extraction, so no empty files are left behind.
 - **Smart extract**: one top-level item goes next to the archive; several items go into a new folder named after the archive.

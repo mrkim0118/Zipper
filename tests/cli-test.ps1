@@ -82,6 +82,19 @@ try {
 
     Check 'extracted executable bytes match the source' ((Get-FileHash "$here\하위\tools.exe\app.v2.exe").Hash -eq (Get-FileHash "$nestedDir\app.v2.ExE").Hash)
 
+    # 3b. a whole ZIP is extracted by several 7z.exe at once: same files, nothing twice, empty folders kept
+    $ps = New-Item -ItemType Directory "$work\par\src"
+    New-Item -ItemType Directory "$ps\sub\deep", "$ps\빈 폴더" | Out-Null
+    1..40 | ForEach-Object { Set-Content "$ps\f$_.txt" ('x' * ($_ * 300)) }
+    1..10 | ForEach-Object { Set-Content "$ps\sub\deep\g$_.txt" "deep $_" }
+    & $7z a -tzip "$work\par\p.zip" "$ps\*" -bso0 -bsp0
+    Run '/xfolder', "`"$work\par\p.zip`""
+    $got = Get-ChildItem "$work\par\p" -Recurse -File
+    Check 'parallel zip: all 50 files, none twice' ($got.Count -eq 50)
+    Check 'parallel zip: empty folder kept' (Test-Path "$work\par\p\빈 폴더" -PathType Container)
+    $diff = $got | Where-Object { (Get-FileHash $_.FullName).Hash -ne (Get-FileHash ($_.FullName.Replace("$work\par\p", $ps))).Hash }
+    Check 'parallel zip: contents match' (-not $diff)
+
     # 4. split archives made elsewhere
     & $7z a -t7z -v1m "$work\split.7z" "$src\big.bin" -bso0 -bsp0
     & $7z a -tzip -v1m "$work\split.zip" "$src\big.bin" -bso0 -bsp0

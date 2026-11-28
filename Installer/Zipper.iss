@@ -1,5 +1,5 @@
 ﻿; Zipper installer (Inno Setup 6). Build with build.ps1 in the repo root.
-#define AppVersion "1.2.3"
+#define AppVersion "1.2.4"
 #define Bin "..\src\Zipper\bin\Release\net48"
 
 [Setup]
